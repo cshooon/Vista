@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter, File, UploadFile, Depends, Form
+from fastapi import APIRouter, Depends, Form, UploadFile, File
 from openai import OpenAI
 from database import MongoClient
 from starlette.responses import JSONResponse, StreamingResponse
@@ -13,119 +13,105 @@ router = APIRouter()
 client = OpenAI(api_key=settings.OPEN_API_KEY)
 
 
-@router.post('/create')
-async def create(file: UploadFile = File(...), name: str = Form(...), user=Depends(get_current_user)):
+@router.post('/create-chat')
+async def create_chat(file: UploadFile = File(...), name: str = Form(...), user=Depends(get_current_user)):
     file_name = file.filename
     file_contents = await file.read()
     try:
-        file = client.files.create(
-            file=file_contents,
+        file_object = client.files.create(
+            file=(file_name, file_contents),
             purpose="assistants",
         )
 
         # 파일 시스템에 파일 저장 (file_id를 파일명으로 사용)
-        file_path = f"static/files/{file.id}.csv"
+        file_path = f"static/files/{file_object.id}.csv"
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb") as f:
             f.write(file_contents)
 
-        thread_response = client.beta.threads.create(
-            messages=[
-                {
-                    "role": "user",
-                    "file_ids": [file.id],
-                    "content": "Follow following messages."
-                }
-            ]
-        )
-        thread_info = thread_response.model_dump()
-        thread_id = thread_info['id']
-
+        thread = client.beta.threads.create(messages=[
+            {"role": "user",
+             "content": "visualize following csv file",
+             "attachments": [{"file_id": file_object.id, "tools": [{"type": "code_interpreter"}]}]
+             }
+        ])
         await MongoClient.get_client().chat.users.update_one(
             {"email": user['email']},
-            {"$push": {"threads": {"thread_id": thread_id, "name": name, "file_name": [{file.id: file_name}],
+            {"$push": {"threads": {"assistant_id": settings.ASSISTANT_ID, "file_name": [{file_object.id: file_name}],
+                                   "thread_id": thread.id,
+                                   "name": name,
                                    "messages": [{}]}}},
         )
-
-        return {'thread_id': thread_id}
-
+        return {"thread_id": thread.id}
     except Exception as e:
         return JSONResponse(status_code=500, content={"message": str(e)})
 
 
-@router.post('/create_example')
-async def create_example(file_name: str = Form(...), name: str = Form(...), user=Depends(get_current_user)):
-    try:
-        file_id = None
-        if file_name == 'cars.csv':
-            file_id = 'file-MBaj0cR57iInT6lHhv7S67hz'
-        elif file_name == 'housing.csv':
-            file_id = 'file-wqrqSzlMC8lsjjfdtQJ9nnsF'
-        elif file_name == 'Iris.csv':
-            file_id = 'file-bYtSYvkZGRF3anUrtkkbuSSL'
+@router.post('/create-chat-example')
+async def create_chat_example(csv_name: str = Form(...), user=Depends(get_current_user)):
+    file_id = None
+    if csv_name == 'shopping_trends.csv':
+        file_id = 'file-9KpfhJkEcugGwbq6vGzSH4'
+    elif csv_name == 'london_houses.csv':
+        file_id = 'file-QXw27DZEUu1eTJ9LeJZkEz'
+    elif csv_name == 'iris.csv':
+        file_id = 'file-8SQdjo4u5oc8CuNWV3W1bc'
+    thread = client.beta.threads.create(messages=[
+        {"role": "user", "content": "give me visualization",
+         "attachments": [{"file_id": file_id, "tools": [{"type": "code_interpreter"}]}]
+         }])
 
-        thread_response = client.beta.threads.create(
-            messages=[
-                {
-                    "role": "user",
-                    "file_ids": [file_id],
-                    "content": "Follow following messages."
-                }
-            ]
-        )
-        thread_info = thread_response.model_dump()
-        thread_id = thread_info['id']
+    await MongoClient.get_client().chat.users.update_one(
+        {"email": user['email']},
+        {"$push": {"threads": {"assistant_id": settings.ASSISTANT_ID, "file_name": [{file_id: csv_name}],
+                               "thread_id": thread.id, "name": csv_name,
+                               "messages": [{}]
+                               }
+                   }},
+    )
 
-        await MongoClient.get_client().chat.users.update_one(
-            {"email": user['email']},
-            {"$push": {"threads": {"thread_id": thread_id, "name": name, "file_name": [{file_id: file_name}],
-                                   "messages": [{}]}}},
-        )
-
-        return {'thread_id': thread_id}
-
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"message": str(e)})
+    return {"thread_id": thread.id}
 
 
-@router.post('/chat')
-async def create_chat(file: UploadFile = None, thread_id: str = Form(...),
-                      message: str = Form(...), user=Depends(get_current_user)):
+@router.post('/continue-chat')
+async def resume(file: UploadFile = None, thread_id: str = Form(...),
+                 message: str = Form(...), user=Depends(get_current_user)):
+    thread = None
     if file:
         file_name = file.filename
         file_contents = await file.read()
-        try:
-            file = client.files.create(
-                file=file_contents,
-                purpose="assistants",
-            )
-            await MongoClient.get_client().chat.users.update_one(
-                {"email": user['email'], "threads.thread_id": thread_id},
-                {"$push": {"threads.$.file_name": {file.id: file_name}}}
-            )
-            message = client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=message,
-                file_ids=[file.id]
-            )
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"message": str(e)})
-    else:
-        try:
-            message = client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=message,
-            )
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"message": str(e)})
-    try:
-        generator = await generate_responses(
-            client,
-            thread_id=thread_id,
+        file_object = client.files.create(
+            file=(file_name, file_contents),
+            purpose="assistants",
         )
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"message": str(e)})
 
+        await MongoClient.get_client().chat.users.update_one(
+            {"email": user['email'], "threads.thread_id": thread_id},
+            {"$push": {"threads.$.file_name": {file_object.id: file_name}}}
+        )
+
+        thread = client.beta.threads.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=message,
+            attachments=[{"file_id": file_object.id, "tools": [{"type": "code_interpreter"}]}],
+        )
+
+    else:
+        thread = client.beta.threads.messages.create(
+            thread_id=thread_id,
+            role="user",
+            content=message,
+            attachments=[],
+        )
+    if not thread:
+        return JSONResponse(status_code=500, content={"message": "thread is None!"})
+
+    generator = await generate_responses(
+        client,
+        settings.ASSISTANT_ID,
+        thread_id,
+    )
     return StreamingResponse(generator(), media_type="text/event-stream")
+
+
