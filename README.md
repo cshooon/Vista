@@ -82,7 +82,7 @@ VISTA는 대규모 언어 모델(LLM)을 기반으로 한 데이터 분석 자�
 - 데이터베이스 스키마 설계
 - API 설계
 
-**BackEnd** (👨🏻‍💻 [cshoon](https://github.com/cshooon)) [code](https://github.com/LlamaVista/LlamaVista/tree/BE)
+**BackEnd** (👨🏻‍💻 [cshoon](https://github.com/cshooon)) ([code](https://github.com/LlamaVista/LlamaVista/tree/BE))
 
 - 데이터베이스 스키마 설계
 - API 설계
