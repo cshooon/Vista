@@ -76,7 +76,7 @@ VISTA는 대규모 언어 모델(LLM)을 기반으로 한 데이터 분석 자�
 
 ## 👨‍💻 Role & Contribution
 
-**Frontend** (👨🏻‍💻 [seoungJun](https://github.com/seo-seoungjun))
+**Frontend** (👨🏻‍💻 [seoungJun](https://github.com/seo-seoungjun)) ([code](https://github.com/LlamaVista/LlamaVista/tree/FE))
 
 - 사용자 페이지 디자인(Figma) 및 프론트개발(React.js)
 - 데이터베이스 스키마 설계
@@ -89,7 +89,7 @@ VISTA는 대규모 언어 모델(LLM)을 기반으로 한 데이터 분석 자�
 - REST API 개발
 - 서버 배포 및 관리
 
-**ML** (👨🏻‍💻 [sabin](https://github.com/sabin5105))
+**ML** (👨🏻‍💻 [sabin](https://github.com/sabin5105)) ([code](https://github.com/LlamaVista/LlamaVista/tree/ML))
 
 - 인공지능 설계 및 개발
 - MLOps
